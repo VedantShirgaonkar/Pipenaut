@@ -59,6 +59,8 @@ Splits the batch into smaller "micro-batches". Pushes all micro-batches forward,
 [Rank 1] ░░████████░░░░░░░░▓▓▓▓▓▓▓▓░░
 [Rank 2] ░░░░████████░░░░▓▓▓▓▓▓▓▓░░░░
 [Rank 3] ░░░░░░████████▓▓▓▓▓▓▓▓░░░░░░
+
+██ = Forward  ▓▓ = Backward  ░░ = Bubble (idle)
 ```
 
 ### 3. 1F1B (One Forward, One Backward)
@@ -69,6 +71,8 @@ The industry standard (used in Megatron-LM, DeepSpeed). Interleaves forward and 
 [Rank 1] ░░██████▓▓██▓▓██▓▓██▓▓██▓▓██▓▓▓▓▓▓░░
 [Rank 2] ░░░░████▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓▓▓░░░░
 [Rank 3] ░░░░░░██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓░░░░░░
+
+██ = Forward  ▓▓ = Backward  ░░ = Bubble (idle)
 ```
 
 ---
@@ -83,7 +87,7 @@ The industry standard (used in Megatron-LM, DeepSpeed). Interleaves forward and 
 
 ---
 
-## 🛠 Usage Reference
+## Usage Reference
 
 ### `pipenaut run` flags
 
