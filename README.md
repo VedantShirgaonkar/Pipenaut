@@ -14,7 +14,7 @@ No GPUs needed. No cluster setup. just `pip install` and run.
 
 Visualizing how data flows through a pipeline is key to understanding efficiency.
 
-![Pipenaut Workflow](docs/PP_pebble_graph.gif)
+![Pipenaut Workflow](docs/pp_workflow.gif)
 
 ---
 
