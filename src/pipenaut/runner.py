@@ -2,15 +2,15 @@
 Process runner for pipeline parallelism.
 
 Spawns multiple processes using torch.multiprocessing to simulate
-pipeline stages. The user never needs to touch torchrun — this
-module handles all the distributed boilerplate.
+pipeline stages. Inter-process communication uses multiprocessing
+Queues — no torch.distributed / Gloo networking is involved,
+so this works on every OS regardless of Docker, Hyper-V, or
+other virtual network adapter configurations.
 """
 
-import os
 import time
 
 import torch
-import torch.distributed as dist
 import torch.multiprocessing as mp
 import torch.optim as optim
 
@@ -29,35 +29,31 @@ def _worker(
     hidden_dim: int,
     total_layers: int,
     chunks: int,
+    fwd_queues: list,
+    bwd_queues: list,
     result_dict: dict,
 ):
     """
     Worker function that runs on each spawned process.
 
-    Sets up the distributed environment, creates the model shard,
-    runs the training loop, and stores results for the main process.
+    Sets up the model shard, runs the training loop, and stores
+    results for the main process.
     """
-    # Set environment variables for init_distributed
-    os.environ["RANK"] = str(rank)
-    os.environ["WORLD_SIZE"] = str(world_size)
-    os.environ["LOCAL_RANK"] = str(rank)
-    os.environ["MASTER_ADDR"] = "127.0.0.1"
-    os.environ["MASTER_PORT"] = str(result_dict.get("_port", 29500))
+    device = torch.device("cpu")
 
-    # Select device
-    if torch.cuda.is_available() and torch.cuda.device_count() >= world_size:
-        device = torch.device(f"cuda:{rank}")
-        backend = "nccl"
-    else:
-        device = torch.device("cpu")
-        backend = "gloo"
+    # Build per-rank queue pairs
+    fwd_send_q = fwd_queues[rank] if rank < world_size - 1 else None
+    fwd_recv_q = fwd_queues[rank - 1] if rank > 0 else None
+    bwd_send_q = bwd_queues[rank - 1] if rank > 0 else None
+    bwd_recv_q = bwd_queues[rank] if rank < world_size - 1 else None
 
-    # Initialize process group
-    dist.init_process_group(backend=backend, rank=rank, world_size=world_size)
-    if torch.cuda.is_available() and torch.cuda.device_count() >= world_size:
-        torch.cuda.set_device(device)
-
-    comms = PipelineComms(rank, world_size)
+    comms = PipelineComms(
+        rank, world_size,
+        fwd_send_q=fwd_send_q,
+        fwd_recv_q=fwd_recv_q,
+        bwd_send_q=bwd_send_q,
+        bwd_recv_q=bwd_recv_q,
+    )
 
     # Reproducible initialization
     torch.manual_seed(42 + rank)
@@ -122,17 +118,6 @@ def _worker(
         result_dict["final_loss"] = losses[-1] if losses else float("nan")
         result_dict["bubble_pct"] = stats["bubble_pct"]
 
-    dist.destroy_process_group()
-
-
-def _find_free_port():
-    """Find a free port on localhost."""
-    import socket
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        return s.getsockname()[1]
-
 
 def run_schedule(
     schedule_name: str,
@@ -171,10 +156,15 @@ def run_schedule(
     if batch_size % chunks != 0:
         raise ValueError(f"batch_size ({batch_size}) must be divisible by chunks ({chunks})")
 
+    # Create queues for inter-stage communication.
+    # fwd_queues[i] carries activations from rank i → rank i+1
+    # bwd_queues[i] carries gradients  from rank i+1 → rank i
+    fwd_queues = [mp.Queue() for _ in range(workers - 1)]
+    bwd_queues = [mp.Queue() for _ in range(workers - 1)]
+
     # Use a multiprocessing Manager to share results across processes
     manager = mp.Manager()
     result_dict = manager.dict()
-    result_dict["_port"] = _find_free_port()
 
     # Spawn workers
     mp.spawn(
@@ -187,6 +177,8 @@ def run_schedule(
             hidden_dim,
             total_layers,
             chunks,
+            fwd_queues,
+            bwd_queues,
             result_dict,
         ),
         nprocs=workers,

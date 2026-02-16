@@ -110,32 +110,85 @@ def _build_gpipe_timeline(workers: int, chunks: int) -> list[str]:
 
 
 def _build_1f1b_timeline(workers: int, chunks: int) -> list[str]:
-    """Build ASCII timeline for 1F1B schedule."""
+    """Build ASCII timeline for 1F1B schedule using dependency simulation."""
     display_chunks = min(chunks, 8)
+
+    # Build the ordered operation list for each rank
+    op_lists: list[list[tuple[str, int]]] = []
+    for rank in range(workers):
+        ops: list[tuple[str, int]] = []
+        num_warmup = min(workers - rank - 1, display_chunks)
+        num_1f1b = display_chunks - num_warmup
+        # Warmup: forward-only
+        for m in range(num_warmup):
+            ops.append(("F", m))
+        # Steady state: one forward then one backward
+        for i in range(max(0, num_1f1b)):
+            ops.append(("F", num_warmup + i))
+            ops.append(("B", i))
+        # Cooldown: remaining backwards
+        for i in range(num_warmup):
+            ops.append(("B", num_1f1b + i))
+        op_lists.append(ops)
+
+    # Simulate: respect cross-rank dependencies
+    #   F(rank, m) cannot start before F(rank-1, m) finishes
+    #   B(rank, m) cannot start before B(rank+1, m) finishes
+    fw_end: dict[tuple[int, int], int] = {}
+    bw_end: dict[tuple[int, int], int] = {}
+    busy = [0] * workers
+    op_idx = [0] * workers
+    events: list[list[tuple[int, str]]] = [[] for _ in range(workers)]
+    total_ops = sum(len(o) for o in op_lists)
+    scheduled = 0
+
+    while scheduled < total_ops:
+        progress = False
+        for rank in range(workers):
+            while op_idx[rank] < len(op_lists[rank]):
+                op_type, mb = op_lists[rank][op_idx[rank]]
+                earliest = busy[rank]
+                can_go = True
+                if op_type == "F" and rank > 0:
+                    if (rank - 1, mb) not in fw_end:
+                        can_go = False
+                    else:
+                        earliest = max(earliest, fw_end[(rank - 1, mb)])
+                if op_type == "B" and rank < workers - 1:
+                    if (rank + 1, mb) not in bw_end:
+                        can_go = False
+                    else:
+                        earliest = max(earliest, bw_end[(rank + 1, mb)])
+                if not can_go:
+                    break
+                end = earliest + 1
+                if op_type == "F":
+                    fw_end[(rank, mb)] = end
+                else:
+                    bw_end[(rank, mb)] = end
+                busy[rank] = end
+                events[rank].append((earliest, op_type))
+                op_idx[rank] += 1
+                scheduled += 1
+                progress = True
+        if not progress:
+            break
+
+    max_time = max(busy) if busy else 0
+
     lines = []
     for rank in range(workers):
-        num_warmup = workers - rank - 1
-        num_1f1b = display_chunks - num_warmup
-
+        grid = ["bubble"] * max_time
+        for start, op_type in events[rank]:
+            grid[start] = op_type
         bar = []
-        # Warmup bubble
-        for _ in range(rank):
-            bar.append(("░░", COLORS["bubble"]))
-        # Warmup forwards
-        for _ in range(num_warmup):
-            bar.append(("██", COLORS["forward"]))
-        # Steady state: 1F1B
-        for _ in range(max(0, num_1f1b)):
-            bar.append(("██", COLORS["forward"]))
-            bar.append(("▓▓", COLORS["backward"]))
-        # Cooldown backwards
-        for _ in range(num_warmup):
-            bar.append(("▓▓", COLORS["backward"]))
-        # Trailing bubble
-        remaining = rank
-        for _ in range(remaining):
-            bar.append(("░░", COLORS["bubble"]))
-
+        for cell in grid:
+            if cell == "F":
+                bar.append(("██", COLORS["forward"]))
+            elif cell == "B":
+                bar.append(("▓▓", COLORS["backward"]))
+            else:
+                bar.append(("░░", COLORS["bubble"]))
         lines.append((rank, bar))
     return lines
 

@@ -67,9 +67,9 @@ Splits the batch into smaller "micro-batches". Pushes all micro-batches forward,
 The industry standard (used in Megatron-LM, DeepSpeed). Interleaves forward and backward passes to keep the pipeline full and memory usage low.
 
 ```
-[Rank 0] ████████▓▓██▓▓██▓▓██▓▓██▓▓▓▓▓▓▓▓
-[Rank 1] ░░██████▓▓██▓▓██▓▓██▓▓██▓▓██▓▓▓▓▓▓░░
-[Rank 2] ░░░░████▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓▓▓░░░░
+[Rank 0] ████████░░░░░░▓▓██▓▓██▓▓██▓▓██▓▓░░▓▓░░▓▓░░▓▓
+[Rank 1] ░░██████░░░░▓▓██▓▓██▓▓██▓▓██▓▓██▓▓░░▓▓░░▓▓░░
+[Rank 2] ░░░░████░░▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓░░▓▓░░░░
 [Rank 3] ░░░░░░██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓██▓▓░░░░░░
 
 ██ = Forward  ▓▓ = Backward  ░░ = Bubble (idle)
