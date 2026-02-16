@@ -1,6 +1,6 @@
 # Pipenaut 
 
-[![PyPI version](https://badge.fury.io/py/pipenaut.svg)](https://badge.fury.io/py/pipenaut)
+[![PyPI version](https://img.shields.io/pypi/v/pipenaut)](https://pypi.org/project/pipenaut/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/release/python-3100/)
 

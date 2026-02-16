@@ -1,6 +1,6 @@
 [project]
 name = "pipenaut"
-version = "0.1.6"
+version = "0.1.7"
 description = "Experience pipeline parallelism on your laptop. Naive, GPipe, 1F1B — one command."
 readme = "README.md"
 license = {text = "MIT"}

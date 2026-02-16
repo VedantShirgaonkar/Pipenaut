@@ -14,6 +14,7 @@ import torch
 
 from pipenaut import __version__
 from pipenaut.display import (
+    compute_bubble_pct,
     console,
     print_comparison_progress,
     print_comparison_table,
@@ -55,6 +56,9 @@ def cmd_run(args):
         chunks=args.chunks,
     )
 
+    # Override profiler bubble with correct theoretical value
+    result["bubble_pct"] = compute_bubble_pct(args.schedule, args.workers, args.chunks)
+
     # Show training progress
     losses = result.get("losses", [])
     print_training_progress(losses, args.steps)
@@ -92,6 +96,9 @@ def cmd_compare(args):
             total_layers=args.layers,
             chunks=args.chunks,
         )
+
+        # Override profiler bubble with correct theoretical value
+        result["bubble_pct"] = compute_bubble_pct(schedule_name, args.workers, args.chunks)
         results.append(result)
 
         wall_time = result.get("wall_time", 0)

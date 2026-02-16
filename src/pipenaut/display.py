@@ -39,6 +39,22 @@ SCHEDULE_SHORT_NAMES = {
 }
 
 
+def compute_bubble_pct(schedule_name: str, workers: int, chunks: int) -> float:
+    """Compute theoretical bubble % from the pipeline schedule.
+
+    Uses the same F=B=1 assumption as the timeline diagrams.
+    Bubble = fraction of total timeline slots that are idle.
+    """
+    if workers <= 1:
+        return 0.0
+    if schedule_name == "naive":
+        # Total slots = 4*workers, compute per rank = 4
+        return (workers - 1) / workers * 100
+    # GPipe and 1F1B have the same bubble with F=B=1:
+    # Total timeline = 2*chunks + 2*(workers-1), compute = 2*chunks
+    return (workers - 1) / (chunks + workers - 1) * 100
+
+
 # ─── Header ──────────────────────────────────────────────────────────────────
 
 def print_header(workers: int, hidden_dim: int, total_layers: int, device_str: str = "CPU"):
